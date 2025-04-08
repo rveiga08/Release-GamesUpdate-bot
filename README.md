@@ -4,6 +4,8 @@ Um bot para Telegram que monitora atualizações dos seus jogos da Steam e te no
 
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Privacy](https://img.shields.io/badge/termos%20e%20privacidade-MIT-green.svg)](https://rveiga08.github.io/steam-bot-privacidade/privacidade.html)
+
 
 ## ✨ Funcionalidades
 
@@ -92,9 +94,9 @@ Distribuído sob a licença MIT. Veja [LICENSE](LICENSE) para mais informações
 
 ## ✉️ Contato
 
-Seu Nome - [@seu_twitter](https://twitter.com/seu_twitter) - seu.email@exemplo.com
+Rodrigo Veiga - [@seu_linkedin](https://linkedin.com/rodrigo-veiga) - rveiga08@hotmail.com
 
-Link do Projeto: [https://github.com/seu-usuario/steam-update-bot](https://github.com/seu-usuario/steam-update-bot)
+Link do Projeto: [https://github.com/rveiga08/steam-update-bot](https://github.com/rveiga08/steam-update-bot)
 
 ---
 
@@ -132,6 +134,7 @@ steam-update-bot/
 ├── updater.py
 ├── config.py
 ├── logger.py
+├── privacidade.html
 └── localization/
     ├── en.json
     ├── pt.json
