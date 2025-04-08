@@ -9,6 +9,7 @@
     "select_games_to_toggle": "Selecione jogos para alternar o status de instalação (jogos instalados serão verificados por atualizações):",
     "game_installed": "✅ Agora monitorando este jogo para atualizações",
     "game_uninstalled": "❌ Não monitorando mais este jogo",
+    "game_not_found": "❌ Jogo não encontrado na sua biblioteca",
     "no_installed_games": "Você não tem nenhum jogo marcado como instalado. Use /jogos para selecionar seus jogos instalados.",
     "installed_games_header": "📋 Jogos que você está monitorando para atualizações:",
     "stats_header": "📈 Suas Estatísticas de Atualizações",
@@ -30,5 +31,12 @@
     "unexpected_error": "Ocorreu um erro inesperado. Por favor, tente novamente.",
     "unexpected_error_occurred": "⚠️ Ocorreu um erro inesperado. O mantenedor do bot foi notificado.",
     "link_account_first": "Por favor, vincule sua conta Steam primeiro usando /vincular <SteamID>",
-    "update_notification": "📢 Atualização disponível para {game_name}!\n🕒 Hora da atualização: {update_time}\n📝 Changelog: {changelog_url}"
+    "update_notification": "📢 Atualização disponível para {game_name}!\n🕒 Hora da atualização: {update_time}\n📝 Changelog: {changelog_url}",
+    "delete_confirmation": "⚠️ Tem certeza que deseja excluir TODOS os seus dados do bot?\n\nIsso removerá:\n- Seu Steam ID vinculado\n- Lista de jogos monitorados\n- Histórico de atualizações\n- Todas as configurações\n\nEsta ação não pode ser desfeita!",
+    "delete_success": "🗑️ Todos os seus dados foram excluídos com sucesso.\n\nSe quiser usar o bot novamente, digite /start",
+    "delete_canceled": "✅ Operação cancelada. Seus dados não foram alterados.",
+    "delete_error": "❌ Ocorreu um erro ao excluir seus dados. Por favor, tente novamente.",
+    "yes_delete": "✅ Sim, excluir meus dados",
+    "cancel": "❌ Cancelar"
+    
 }
