@@ -116,3 +116,12 @@ class UpdateChecker:
                 logger.error(f"Error checking updates for user {telegram_id}: {e}")
         
         logger.info("Completed update check for all users")
+        
+    def unschedule_user_check(self, telegram_id):
+        """Remove as verificações agendadas para um usuário"""
+        if telegram_id in self.jobs:
+            self.jobs[telegram_id].remove()
+            del self.jobs[telegram_id]
+            logger.info(f"Unscheduled update checks for user {telegram_id}")
+            return True
+        return False    

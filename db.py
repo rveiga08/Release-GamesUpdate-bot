@@ -187,6 +187,13 @@ class Database:
         except sqlite3.Error as e:
             logger.error(f"Database error getting user stats: {e}")
             return None
+    def is_game_installed(self, telegram_id, game_id):
+        with closing(self.conn.cursor()) as c:
+            c.execute('''SELECT installed FROM games 
+                        WHERE telegram_id = ? AND game_id = ?''', 
+                        (telegram_id, game_id))
+            result = c.fetchone()
+            return result[0] if result else False
     
     def close(self):
         self.conn.close()
