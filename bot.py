@@ -14,6 +14,7 @@ from steam_api import SteamAPI
 from updater import UpdateChecker
 from config import Config
 from logger import logger
+from contextlib import closing
 
 def load_localization():
     """Carrega os arquivos de localização da pasta 'localization'"""
@@ -49,11 +50,12 @@ class SteamUpdateBot:
         self.application.add_handler(CommandHandler("start", self.start))
         self.application.add_handler(CommandHandler("help", self.help))
         self.application.add_handler(CommandHandler("vincular", self.link_account))
-        self.application.add_handler(CommandHandler("jogos", self.list_games))
+        self.application.add_handler(CommandHandler("games", self.list_games))
         self.application.add_handler(CommandHandler("status", self.status))
         self.application.add_handler(CommandHandler("stats", self.stats))
         self.application.add_handler(CommandHandler("settings", self.settings))
         self.application.add_handler(CommandHandler("language", self.language))
+        self.application.add_handler(CommandHandler("delete", self.delete_account))
         
         # Handler de mensagens
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -121,19 +123,38 @@ class SteamUpdateBot:
         user_id = update.effective_user.id
         user = self.db.get_user(user_id)
         
-        if not user or not user[1]:
+        if not user or not user[1]:  # Verifica se o usuário tem Steam ID vinculado
             await update.message.reply_text(self.get_text(update, 'link_account_first'))
             return
         
-        games = self.db.get_installed_games(user_id)
+        # Busca os jogos da biblioteca Steam
+        games = self.steam_api.get_owned_games(user[1])
         if not games:
             await update.message.reply_text(self.get_text(update, 'no_games_found'))
             return
         
+        # Verifica se a resposta da API está no formato esperado
+        if isinstance(games, dict) and 'games' in games.get('response', {}):
+            games = games['response']['games']
+        
+        # Ordena os jogos por tempo jogado (decrescente)
+        games.sort(key=lambda x: x.get('playtime_forever', 0), reverse=True)
+        
+        # Prepara o teclado com os jogos
         keyboard = []
-        for game_id, game_name, _, last_played in games:
-            played_hours = last_played // 60
-            text = f"{game_name} ({played_hours}h)" if played_hours > 0 else game_name
+        for game in games:
+            game_id = game['appid']
+            game_name = game.get('name', f"AppID {game_id}")
+            playtime_hours = game.get('playtime_forever', 0) // 60
+            
+            # Verifica se o jogo já está marcado como instalado
+            is_installed = self.db.is_game_installed(user_id, game_id)
+            status_emoji = "✅" if is_installed else "❌"
+            
+            text = f"{status_emoji} {game_name}"
+            if playtime_hours > 0:
+                text += f" ({playtime_hours}h)"
+                
             keyboard.append([InlineKeyboardButton(text, callback_data=f"toggle_{game_id}")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -216,6 +237,20 @@ class SteamUpdateBot:
         settings_msg += f"🌐 Language: {user[2]}\n"
         
         await update.message.reply_text(settings_msg, reply_markup=reply_markup)
+        
+    async def delete_account(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+    
+        keyboard = [
+            [InlineKeyboardButton(self.get_text(update, 'yes_delete'), callback_data="confirm_delete")],
+            [InlineKeyboardButton(self.get_text(update, 'cancel'), callback_data="cancel_delete")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            self.get_text(update, 'delete_confirmation'),
+            reply_markup=reply_markup
+        )    
 
     async def language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -240,78 +275,126 @@ class SteamUpdateBot:
         user_id = query.from_user.id
         data = query.data
         
-        if data.startswith("toggle_"):
-            game_id = int(data.split("_")[1])
-            
-            with closing(self.db.conn.cursor()) as c:
-                c.execute('''SELECT installed FROM games 
-                            WHERE telegram_id = ? AND game_id = ?''', (user_id, game_id))
-                result = c.fetchone()
+        try:
+            if data.startswith("toggle_"):
+                game_id = int(data.split("_")[1])
                 
-                if result:
-                    new_status = not result[0]
-                    c.execute('''UPDATE games SET installed = ? 
-                                WHERE telegram_id = ? AND game_id = ?''', 
-                                (new_status, user_id, game_id))
-                    self.db.conn.commit()
-                    
+                # Obter nome do jogo antes de fazer qualquer alteração
+                game_name = None
+                with closing(self.db.conn.cursor()) as c:
                     c.execute('''SELECT name FROM games 
-                                WHERE telegram_id = ? AND game_id = ?''', (user_id, game_id))
-                    game_name = c.fetchone()[0]
+                                WHERE telegram_id = ? AND game_id = ?''', 
+                                (user_id, game_id))
+                    result = c.fetchone()
+                    if result:
+                        game_name = result[0]
+                
+                if game_name:
+                    # Alternar status de instalação
+                    with closing(self.db.conn.cursor()) as c:
+                        c.execute('''UPDATE games SET installed = NOT installed 
+                                    WHERE telegram_id = ? AND game_id = ?''', 
+                                    (user_id, game_id))
+                        self.db.conn.commit()
+                    
+                    # Verificar novo status
+                    with closing(self.db.conn.cursor()) as c:
+                        c.execute('''SELECT installed FROM games 
+                                    WHERE telegram_id = ? AND game_id = ?''', 
+                                    (user_id, game_id))
+                        new_status = c.fetchone()[0]
                     
                     status_msg = self.get_text(update, 'game_installed') if new_status else self.get_text(update, 'game_uninstalled')
                     await query.edit_message_text(f"{game_name} - {status_msg}")
                     
-                    installed_games = self.db.get_installed_games(user_id)
-                    if len(installed_games) == (1 if new_status else 0):
+                    # Reschedule checks if needed
+                    installed_count = 0
+                    with closing(self.db.conn.cursor()) as c:
+                        c.execute('''SELECT COUNT(*) FROM games 
+                                    WHERE telegram_id = ? AND installed = TRUE''', 
+                                    (user_id,))
+                        installed_count = c.fetchone()[0]
+                    
+                    if installed_count == (1 if new_status else 0):
                         self.update_checker.schedule_user_check(user_id)
-        
-        elif data == "setting_interval":
-            keyboard = [
-                [InlineKeyboardButton("1 hour", callback_data="interval_1")],
-                [InlineKeyboardButton("3 hours", callback_data="interval_3")],
-                [InlineKeyboardButton("6 hours", callback_data="interval_6")],
-                [InlineKeyboardButton("12 hours", callback_data="interval_12")],
-                [InlineKeyboardButton("24 hours", callback_data="interval_24")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(
-                self.get_text(update, 'select_interval'),
-                reply_markup=reply_markup
-            )
-        
-        elif data.startswith("interval_"):
-            interval = int(data.split("_")[1])
-            self.db.update_user_setting(user_id, 'check_interval', interval)
-            self.update_checker.schedule_user_check(user_id)
-            await query.edit_message_text(
-                self.get_text(update, 'interval_set').format(interval=interval)
-            )
-        
-        elif data == "setting_silent":
-            user = self.db.get_user(user_id)
-            new_status = not user[4]
-            self.db.update_user_setting(user_id, 'silent_mode', new_status)
+                else:
+                    await query.edit_message_text(self.get_text(update, 'game_not_found'))
             
-            status_msg = self.get_text(update, 'silent_mode_on') if new_status else self.get_text(update, 'silent_mode_off')
-            await query.edit_message_text(status_msg)
+            elif data == "confirm_delete":
+                try:
+                    with closing(self.db.conn.cursor()) as c:
+                        # Remove todos os dados do usuário
+                        c.execute('DELETE FROM users WHERE telegram_id = ?', (user_id,))
+                        c.execute('DELETE FROM games WHERE telegram_id = ?', (user_id,))
+                        c.execute('DELETE FROM updates WHERE telegram_id = ?', (user_id,))
+                        c.execute('DELETE FROM stats WHERE telegram_id = ?', (user_id,))
+                        self.db.conn.commit()
+                    
+                    # Cancela verificações agendadas
+                    self.update_checker.unschedule_user_check(user_id)
+                    
+                    await query.edit_message_text(
+                        "🗑️ Todos os seus dados foram excluídos com sucesso.\n\n"
+                        "Se quiser usar o bot novamente, digite /start"
+                    )
+                except Exception as e:
+                    logger.error(f"Error deleting account {user_id}: {e}")
+                    await query.edit_message_text("❌ Ocorreu um erro ao excluir seus dados. Por favor, tente novamente.")
+
+            elif data == "cancel_delete":
+                await query.edit_message_text("✅ Operação cancelada. Seus dados não foram alterados.")
+            
+            # Adicione estas condições para lidar com os botões de configuração
+            elif data == "setting_interval":
+                keyboard = [
+                    [InlineKeyboardButton("1 hora", callback_data="interval_1")],
+                    [InlineKeyboardButton("3 horas", callback_data="interval_3")],
+                    [InlineKeyboardButton("6 horas", callback_data="interval_6")],
+                    [InlineKeyboardButton("12 horas", callback_data="interval_12")],
+                    [InlineKeyboardButton("24 horas", callback_data="interval_24")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    self.get_text(update, 'select_interval'),
+                    reply_markup=reply_markup
+                )
+            
+            elif data.startswith("interval_"):
+                interval = int(data.split("_")[1])
+                self.db.update_user_setting(user_id, 'check_interval', interval)
+                self.update_checker.schedule_user_check(user_id)
+                await query.edit_message_text(
+                    self.get_text(update, 'interval_set').format(interval=interval)
+                )
+            
+            elif data == "setting_silent":
+                user = self.db.get_user(user_id)
+                new_status = not user[4]
+                self.db.update_user_setting(user_id, 'silent_mode', new_status)
+                
+                status_msg = self.get_text(update, 'silent_mode_on') if new_status else self.get_text(update, 'silent_mode_off')
+                await query.edit_message_text(status_msg)
+            
+            elif data == "setting_language":
+                keyboard = [
+                    [InlineKeyboardButton("English", callback_data="lang_en")],
+                    [InlineKeyboardButton("Português", callback_data="lang_pt")],
+                    [InlineKeyboardButton("Español", callback_data="lang_es")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    self.get_text(update, 'select_language'),
+                    reply_markup=reply_markup
+                )
+            
+            elif data.startswith("lang_"):
+                lang = data.split("_")[1]
+                self.db.update_user_setting(user_id, 'language', lang)
+                await query.edit_message_text(self.get_text(update, 'language_changed'))
         
-        elif data == "setting_language":
-            keyboard = [
-                [InlineKeyboardButton("English", callback_data="lang_en")],
-                [InlineKeyboardButton("Português", callback_data="lang_pt")],
-                [InlineKeyboardButton("Español", callback_data="lang_es")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(
-                self.get_text(update, 'select_language'),
-                reply_markup=reply_markup
-            )
-        
-        elif data.startswith("lang_"):
-            lang = data.split("_")[1]
-            self.db.update_user_setting(user_id, 'language', lang)
-            await query.edit_message_text(self.get_text(update, 'language_changed'))
+        except Exception as e:
+            logger.error(f"Error in button_callback: {e}")
+            await query.edit_message_text(self.get_text(update, 'unexpected_error'))
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(self.get_text(update, 'unrecognized_command'))
