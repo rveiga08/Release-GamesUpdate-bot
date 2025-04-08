@@ -1,1 +1,7 @@
+# Ignorar arquivo de variáveis sensíveis
 .env
+
+# Ignorar ambiente virtual
+venv/
+__pycache__/
+*.pyc
