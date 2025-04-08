@@ -5,3 +5,7 @@
 venv/
 __pycache__/
 *.pyc
+
+# Ignorar arquivos de logs e banco de dados
+steam_bot.log
+steam_bot.db
