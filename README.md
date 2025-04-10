@@ -28,7 +28,7 @@ Um bot para Telegram que monitora atualizações dos seus jogos da Steam e te no
 
 1. Clone o repositório:
 ```bash
-git clone https://github.com/seu-usuario/steam-update-bot.git
+git clone https://github.com/rveiga08/steam-update-bot.git
 cd steam-update-bot
 ```
 
