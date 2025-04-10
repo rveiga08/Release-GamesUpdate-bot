@@ -2,6 +2,8 @@
 
 Um bot para Telegram que monitora atualizações dos seus jogos da Steam e te notifica quando novas versões são lançadas.
 
+Link para Bot Oficial: t.me/release_gamesupdate_bot
+
 [![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Privacy](https://img.shields.io/badge/termos%20e%20privacidade-MIT-green.svg)](https://rveiga08.github.io/steam-bot-privacidade/privacidade.html)
