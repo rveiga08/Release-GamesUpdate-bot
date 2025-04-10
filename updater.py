@@ -76,6 +76,12 @@ class UpdateChecker:
             
             current_build = self.steam_api.get_current_build_id(game_id)
             if not current_build:
+                logger.warning(
+                    f"[buildid_empty] Couldn't get current build for '{game_name}' (ID: {game_id}). "
+                    "Resposta da API pode estar incompleta ou jogo foi recentemente removido."
+                )
+                continue
+            if not current_build:
                 logger.warning(f"Couldn't get current build for {game_name} (ID: {game_id})")
                 continue
             

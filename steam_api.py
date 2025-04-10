@@ -116,10 +116,14 @@ class SteamAPI:
         """Obtém o build ID atual do jogo usando SteamDB"""
         try:
             changelog = self.get_steamdb_changelog(app_id)
-            if changelog and 'build_id' in changelog:
-                return changelog['build_id']
-            
-            # Fallback para API da Steam se SteamDB falhar
+            if changelog:
+                build_id = changelog.get('build_id')
+                if build_id and str(build_id).isdigit() and int(build_id) > 0:
+                    return str(build_id)
+                else:
+                    logger.warning(f"[buildid_empty] SteamDB retornou build_id inválido para app {app_id}: {build_id}")
+
+            # Fallback para API da Steam
             url = f"{self.base_url}/ISteamApps/UpToDateCheck/v1/"
             params = {
                 'key': self.api_key,
@@ -127,13 +131,19 @@ class SteamAPI:
                 'version': 0
             }
             response = self._make_request(url, params)
-            
+
             if response and response.get('response', {}).get('success', False):
-                return str(response['response']['required_version'])
-            
-            logger.warning(f"Couldn't get build ID for app {app_id}")
+                required_version = response['response'].get('required_version')
+                if required_version and int(required_version) > 0:
+                    return str(required_version)
+                else:
+                    logger.warning(f"[buildid_empty] Steam API retornou required_version inválido para app {app_id}: {required_version}")
+            else:
+                logger.warning(f"[buildid_empty] Fallback Steam API falhou para app {app_id}: {response}")
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Error getting build ID for app {app_id}: {e}")
             return None
+
