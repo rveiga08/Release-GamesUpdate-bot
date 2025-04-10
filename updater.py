@@ -60,35 +60,40 @@ class UpdateChecker:
         logger.info(f"Checking updates for user {telegram_id}")
         
         user = self.db.get_user(telegram_id)
-        if not user or not user[1]:  # No Steam ID
+        if not user or not user['steam_id']:
             return False
         
-        steam_id = user[1]
         installed_games = self.db.get_installed_games(telegram_id)
         if not installed_games:
             return False
         
         updates_found = 0
         
-        for game_id, game_name, last_buildid, _ in installed_games:
+        for game in installed_games:
+            game_id = game['game_id']
+            game_name = game['name']
+            last_buildid = game['last_buildid']
+            
             current_build = self.steam_api.get_current_build_id(game_id)
             if not current_build:
+                logger.warning(f"Couldn't get current build for {game_name} (ID: {game_id})")
                 continue
             
+            logger.debug(f"Game: {game_name} | Last: {last_buildid} | Current: {current_build}")
+            
             if last_buildid != current_build:
-                # New update found
                 changelog = self.steam_api.get_steamdb_changelog(game_id)
                 changelog_url = changelog.get('url') if changelog else f"https://steamdb.info/app/{game_id}/patchnotes/"
                 
-                # Record the update
+                # Registra a atualização
                 self.db.record_update(telegram_id, game_id, game_name, current_build, changelog_url)
                 self.db.update_game_buildid(telegram_id, game_id, current_build)
                 
-                # Send notification if not in silent mode
-                if not user[4]:  # silent_mode is False
+                # Notifica o usuário se não estiver em modo silencioso
+                if not user['silent_mode']:
                     message = (
-                        f"📢 Update available for {game_name}!\n"
-                        f"🕒 Update time: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                        f"📢 Atualização disponível para {game_name}!\n"
+                        f"🕒 Hora da verificação: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
                         f"📝 Changelog: {changelog_url}"
                     )
                     try:

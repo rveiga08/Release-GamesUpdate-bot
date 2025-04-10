@@ -87,28 +87,53 @@ class SteamAPI:
         return data.get(str(app_id), {}).get('data') if data else None
     
     def get_steamdb_changelog(self, app_id):
-        url = f"{self.steamdb_url}/PatchData/"
-        params = {
-            'appid': app_id
-        }
-        data = self._make_request(url, params, use_cache=False)
-        
-        if not data or not data.get('success'):
+        """Obtém informações de changelog do SteamDB"""
+        try:
+            url = f"https://steamdb.info/api/Patchnotes/Get/?appid={app_id}"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if not data.get('success'):
+                return None
+            
+            changes = data.get('changes', [])
+            if not changes:
+                return None
+            
+            latest_change = changes[0]
+            return {
+                'build_id': str(latest_change.get('buildid')),
+                'time': latest_change.get('time'),
+                'change_description': latest_change.get('change_description'),
+                'url': f"https://steamdb.info/app/{app_id}/patchnotes/"
+            }
+        except Exception as e:
+            logger.error(f"Error getting SteamDB changelog for app {app_id}: {e}")
             return None
-        
-        changes = data.get('changes', [])
-        if not changes:
-            return None
-        
-        latest_change = changes[0]
-        return {
-            'build_id': latest_change.get('buildid'),
-            'time': latest_change.get('time'),
-            'changelog': latest_change.get('change_description'),
-            'url': f"https://steamdb.info/app/{app_id}/patchnotes/"
-        }
     
     def get_current_build_id(self, app_id):
-        """Get the current build ID from SteamDB"""
-        changelog = self.get_steamdb_changelog(app_id)
-        return changelog.get('build_id') if changelog else None
+        """Obtém o build ID atual do jogo usando SteamDB"""
+        try:
+            changelog = self.get_steamdb_changelog(app_id)
+            if changelog and 'build_id' in changelog:
+                return changelog['build_id']
+            
+            # Fallback para API da Steam se SteamDB falhar
+            url = f"{self.base_url}/ISteamApps/UpToDateCheck/v1/"
+            params = {
+                'key': self.api_key,
+                'appid': app_id,
+                'version': 0
+            }
+            response = self._make_request(url, params)
+            
+            if response and response.get('response', {}).get('success', False):
+                return str(response['response']['required_version'])
+            
+            logger.warning(f"Couldn't get build ID for app {app_id}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting build ID for app {app_id}: {e}")
+            return None

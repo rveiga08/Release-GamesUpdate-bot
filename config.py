@@ -28,5 +28,5 @@ class Config:
     CACHE_EXPIRATION = 3600  # 1 hour in seconds
     
     # Logging
-    LOG_LEVEL = 'INFO'
+    LOG_LEVEL = 'DEBUG'
     LOG_FILE = 'steam_bot.log'

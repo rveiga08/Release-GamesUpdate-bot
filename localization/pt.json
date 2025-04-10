@@ -37,6 +37,8 @@
     "delete_canceled": "✅ Operação cancelada. Seus dados não foram alterados.",
     "delete_error": "❌ Ocorreu um erro ao excluir seus dados. Por favor, tente novamente.",
     "yes_delete": "✅ Sim, excluir meus dados",
-    "cancel": "❌ Cancelar"
-    
+    "cancel": "❌ Cancelar",
+    "bug_report_instructions": "🐛 Por favor, descreva o bug que encontrou...",
+    "bug_report_image_received": "📸 Imagem recebida! Agora por favor descreva o problema:",
+    "bug_report_saved": "✅ Relatório de bug enviado com sucesso! Obrigado por ajudar a melhorar o bot."
 }
